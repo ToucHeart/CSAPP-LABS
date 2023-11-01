@@ -268,8 +268,22 @@ int logicalNeg(int x)
  */
 int howManyBits(int x)
 {
-  
-  return 0;
+  int sign = x >> 31;
+  int b16, b8, b4, b2, b1, b0;
+  x = (x & (~sign)) | (x ^ sign); // 如果x为正则不变，否则按位取反（这样好找最高位为1的，原来是最高位为0的，这样也将符号位去掉了）
+
+  b16 = (!!(x >> 16)) << 4; // 高十六位是否有1
+  x >>= b16;                // 如果有（至少需要16位），则将原数右移16位
+  b8 = (!!(x >> 8)) << 3;   // 剩余位高8位是否有1
+  x >>= b8;                 // 如果有（至少需要16+8=24位），则右移8位
+  b4 = (!!(x >> 4)) << 2;
+  x >>= b4;
+  b2 = (!!(x >> 2)) << 1;
+  x >>= b2;
+  b1 = !!(x >> 1);
+  x >>= b1;
+  b0 = x;                                  // 最后一位是不是1
+  return b16 + b8 + b4 + b2 + b1 + b0 + 1; // 加上符号位
 }
 // float
 /*
@@ -285,7 +299,56 @@ int howManyBits(int x)
  */
 unsigned floatScale2(unsigned uf)
 {
-  return 2;
+  /*
+    IEEE 754 float format:
+    sign     exp      fraction
+    1        8        23
+
+    exp           fraction      number
+    全1           全0           --> inf
+    全1           非0           --> NaN
+    全0           全0           --> 0
+    全0           非0           --> 非规格化数
+    非全0非全1     任意          --> 规格化数
+  */
+  unsigned int sign = uf >> 31;
+  unsigned int exp = (uf >> 23) & 0xff;
+  unsigned int fraction = uf & 0x7fffff;
+  if (exp == 0xff && fraction != 0) // NaN , return NaN
+    return uf;
+  if (exp == 0xff && fraction == 0) // inf ,return inf
+    return uf;
+  if (exp == 0)
+  {
+    if (fraction == 0) // 0,return 0
+      return uf;
+    else // 非规格化数,0.010..1  *  2^ (-126)
+    {
+      if (fraction & 0x400000) // 尾数的最高位为1
+      {
+        fraction &= 0x3fffff; // 尾数最高位清零
+        fraction <<= 1;       // 尾数左移一位
+        exp = 1;              // 将指数设为1,结果还是乘以2^(-126)
+      }
+      else // 最高位不为1
+      {
+        fraction <<= 1; // 直接将尾数左移一位
+      }
+    }
+  }
+  else // 规格化数
+  {
+    exp++;           // 阶码++
+    if (exp == 0xff) // 如果阶码变成全1,设置为inf
+    {
+      fraction = 0; // 将fraction 清零,变为inf
+    }
+  }
+  unsigned int ans = 0;
+  ans |= (sign << 31); // set sign bit
+  ans |= (exp << 23);
+  ans |= fraction;
+  return ans;
 }
 /*
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
