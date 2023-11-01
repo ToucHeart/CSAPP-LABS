@@ -310,10 +310,14 @@ unsigned floatScale2(unsigned uf)
     全0           全0           --> 0
     全0           非0           --> 非规格化数
     非全0非全1     任意          --> 规格化数
+
+    0和特别小的数,指数都是全零的,inf和NaN指数是全1的
   */
   unsigned int sign = uf >> 31;
   unsigned int exp = (uf >> 23) & 0xff;
   unsigned int fraction = uf & 0x7fffff;
+  unsigned int ans = 0;
+
   if (exp == 0xff && fraction != 0) // NaN , return NaN
     return uf;
   if (exp == 0xff && fraction == 0) // inf ,return inf
@@ -344,7 +348,6 @@ unsigned floatScale2(unsigned uf)
       fraction = 0; // 将fraction 清零,变为inf
     }
   }
-  unsigned int ans = 0;
   ans |= (sign << 31); // set sign bit
   ans |= (exp << 23);
   ans |= fraction;
@@ -364,7 +367,52 @@ unsigned floatScale2(unsigned uf)
  */
 int floatFloat2Int(unsigned uf)
 {
-  return 2;
+  int INTMIN = 0x80000000u;
+  unsigned sign = uf >> 31;
+  int exp = (uf >> 23) & 0xff;
+  unsigned fraction = uf & 0x7fffff;
+  int ans = 0;
+
+  if (exp == 0xff && fraction != 0) // NaN , return INTMIN
+    return INTMIN;
+  if (exp == 0xff && fraction == 0) // inf ,return INTMIN
+    return INTMIN;
+  if (exp == 0)
+  {
+    if (fraction == 0) // 0,return 0
+      return 0;
+    else // 非规格化数,0.010..1  *  2^ (-126) 结果为小数,取0
+    {
+      return 0;
+    }
+  }
+  else // 规格化数
+  {
+    exp -= 127;
+    if (exp < 0) // 结果为小数,取0
+      return 0;
+    if (exp <= 23) // 如果阶码<=23,只取部分尾数
+    {
+      ans = 1 << exp;          // 还原隐藏的1
+      fraction >>= (23 - exp); // 取fraction的前exp位
+      ans |= fraction;         // 加上fraction的前exp位
+    }
+    else
+    {
+      ans = (1 << 23) | fraction; // 还原隐藏的1,加上fraction全部位
+      exp -= 23;                  // 此时结果应该为ans<<(2^exp),但是可能会溢出
+      while (exp)                 // 循环左移,直到溢出或者exp为0
+      {
+        ans <<= 1;
+        exp--;
+        // ans的范围: 0~0x80000000
+        // ans表示真正结果的绝对值,如果此时ans为负,原数为正的话已经溢出,原数为负的话,可能溢出负数的绝对值的最大范围,也可能等于最小负数,都应该返回INTMIN
+        if (ans < 0)
+          return 0x80000000u;
+      }
+    }
+    return sign ? -ans : ans; // 乘上符号位
+  }
 }
 /*
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -381,5 +429,28 @@ int floatFloat2Int(unsigned uf)
  */
 unsigned floatPower2(int x)
 {
-  return 2;
+  int INF = 0xff << 23;
+  int exp = x + 127;
+  int fraction = 0x400000;
+  if (x >= 128)
+    return INF;
+  if (x < -149) // 最小数是1*2^(-126 + -23)
+    return 0;
+  if (x >= 0)
+  {
+    return exp << 23;
+  }
+  else
+  {
+    if (x >= -126)
+    {
+      return exp << 23;
+    }
+    else // x<=-127
+    {
+      x = -x;
+      fraction >>= (x - 127);
+      return fraction;
+    }
+  }
 }
