@@ -1,0 +1,7 @@
+Power is a challenge for integrated circuits.
+0 1101936177
+230 116 59 30 16 9 5 3 2
+13 842									
+8 149										
+aaachhhi
+5 1 6 3 2 7 4

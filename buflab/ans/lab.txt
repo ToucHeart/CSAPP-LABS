@@ -1,0 +1,30 @@
+0x804d288 global value 地址
+0x469d21e2 :cookie值
+0x804d280:cookie地址
+缓冲区首地址:0x5568b00b
+rumble阶段cookie的字符串表示::34 36 39 44 32 31 45 32 00
+
+boom阶段:getbuf下一条指令: 0x08049577
+
+
+
+
+cat bang.txt | ./hex2raw | ./bufbomb -u 201220129
+./hex2raw < bang.txt > bang-raw.txt
+run -u 201220129 < bang-raw.txt
+
+gcc -m32 -c example.S
+objdump -d example.o > example.d
+
+getbuf下一条指令::0x080495f1
+
+buf首地址在ebp-0x24b位置
+
+ buf:
+ 3:0x5568ad75
+ 5:0x5568adb5 
+ 1:0x5568add5  
+ 2:0x5568ade5
+ 4:0x5568ae25
+ 
+
