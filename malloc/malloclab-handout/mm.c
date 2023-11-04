@@ -54,7 +54,7 @@ team_t team = {
 #define PUT(p, val) (*(unsigned int *)(p) = (val))
 
 #define GET_SIZE(p) (GET(p) & (~0x7))
-#define GET_ALLOC(p) (GET(p) & 0x1)
+#define GET_ALLOC(p) (GET(p) & (0x1))
 
 /*get its header and footer ptr of a given block ptr */
 #define HDRP(bp) ((char *)(bp)-WSIZE)
@@ -121,7 +121,7 @@ static void *extend_heap(size_t words)
  */
 int mm_init(void)
 {
-    if ((heap_listp = mem_sbrk(4 * WSIZE) == (void *)-1))
+    if ((heap_listp = mem_sbrk(4 * WSIZE)) == ((void *)-1))
         return -1;
     PUT(heap_listp, 0);
     PUT(heap_listp + WSIZE, PACK(DSIZE, 1));
@@ -156,7 +156,7 @@ static void *find_first_fit(size_t size)
 {
     char *bp = NEXT_BLKP(heap_listp);
     size_t cur_size = GET_SIZE(HDRP(bp));
-    while (cur_size && cur_size < size)
+    while (cur_size > 0 && (GET_ALLOC(HDRP(bp)) || cur_size < size))
     {
         bp = NEXT_BLKP(bp);
         cur_size = GET_SIZE(HDRP(bp));
@@ -185,6 +185,13 @@ void *mm_malloc(size_t size)
         place(bp, size);
         return bp;
     }
+    size_t extendsize = MAX(CHUNK_SIZE, size);
+    if ((bp = extend_heap(extendsize / WSIZE)) == NULL)
+    {
+        return NULL;
+    }
+    place(bp, size);
+    return bp;
 }
 
 /*
@@ -212,7 +219,7 @@ void *mm_realloc(void *ptr, size_t size)
     newptr = mm_malloc(size);
     if (newptr == NULL)
         return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+    copySize = GET_SIZE(HDRP(oldptr));
     if (size < copySize)
         copySize = size;
     memcpy(newptr, oldptr, copySize);
