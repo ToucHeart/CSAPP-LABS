@@ -152,18 +152,27 @@ static void place(void *bp, size_t asize)
     }
 }
 
-static void *find_first_fit(size_t size)
+static void *find_best_fit(size_t size)
 {
+    size_t best_size = __INT_MAX__;
+    char *best_bp = NULL;
+
     char *bp = NEXT_BLKP(heap_listp);
     size_t cur_size = GET_SIZE(HDRP(bp));
-    while (cur_size > 0 && (GET_ALLOC(HDRP(bp)) || cur_size < size))
+    while (cur_size)
     {
+        if (!GET_ALLOC(HDRP(bp)) && cur_size >= size)
+        {
+            if (cur_size < best_size)
+            {
+                best_bp = bp;
+                best_size = cur_size;
+            }
+        }
         bp = NEXT_BLKP(bp);
         cur_size = GET_SIZE(HDRP(bp));
     }
-    if (!cur_size)
-        return NULL;
-    return bp;
+    return best_bp;
 }
 /*
  * mm_malloc - Allocate a block by incrementing the brk pointer.
@@ -179,7 +188,7 @@ void *mm_malloc(size_t size)
     {
         size = ALIGN((size + DSIZE));
     }
-    char *bp = find_first_fit(size);
+    char *bp = find_best_fit(size);
     if (bp != NULL)
     {
         place(bp, size);
