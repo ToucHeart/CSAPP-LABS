@@ -64,9 +64,60 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))
 #define PREV_BLKP(bp) ((char *)(bp)-GET_SIZE(((char *)(bp)-DSIZE)))
 
-static char *heap_listp;
+#define NEXT_FBLKP(bp) ((void *)*(unsigned int *)(bp))
+#define PREV_FBLKP(bp) ((void *)*((unsigned int *)(bp) + 1))
 
-static void *coalesce(char *bp)
+#define SET_NEXT_FRBLK(bp, val) (*(unsigned int *)(bp) = (val))
+#define SET_PREV_FRBLK(bp, val) (*((unsigned int *)(bp) + 1) = (val))
+
+static char *heap_listp; // always points to the prologue block
+static char *free_listp; // points to the free list head
+
+static remove_from_flist(void *bp)
+{
+    void *prev = PREV_FBLKP(bp);
+    void *next = NEXT_FBLKP(bp);
+
+    SET_NEXT_FRBLK(bp, 0);
+    SET_PREV_FRBLK(bp, 0);
+
+    if (prev == NULL && next == NULL)
+    {
+        free_listp = NULL;
+    }
+    else if (prev != NULL && next == NULL)
+    {
+        SET_NEXT_FRBLK(prev, 0);
+    }
+    else if (prev == NULL && next != NULL)
+    {
+        free_listp = next;
+        SET_PREV_FRBLK(next, 0);
+    }
+    else
+    {
+        SET_NEXT_FRBLK(prev, next);
+        SET_PREV_FRBLK(next, prev);
+    }
+}
+
+// insert to the head of the free list
+static insert_to_flist(void *bp)
+{
+    if (free_listp == NULL)
+    {
+        free_listp = bp;
+        SET_NEXT_FRBLK(bp, 0);
+        SET_PREV_FRBLK(bp, 0);
+        return;
+    }
+    SET_PREV_FRBLK(bp, 0);          // bp-> prev = null
+    SET_NEXT_FRBLK(bp, free_listp); // bp->next = free_listp
+    SET_PREV_FRBLK(free_listp, bp); // free_listp->prev = bp
+    free_listp = bp;                // free_listp=bp
+}
+
+static void *coalesce(void *bp)
 {
     size_t prev_alloc = GET_ALLOC(HDRP(PREV_BLKP(bp)));
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
@@ -74,10 +125,10 @@ static void *coalesce(char *bp)
 
     if (prev_alloc && next_alloc)
     {
-        return bp;
     }
     else if (prev_alloc && !next_alloc)
     {
+        remove_from_flist(NEXT_BLKP(bp));
         size_t next_size = GET_SIZE(HDRP(NEXT_BLKP(bp)));
         cur_size += next_size;
         PUT(FTRP(NEXT_BLKP(bp)), PACK(cur_size, 0));
@@ -85,6 +136,7 @@ static void *coalesce(char *bp)
     }
     else if (!prev_alloc && next_alloc)
     {
+        remove_from_flist(PREV_BLKP(bp));
         size_t prev_size = GET_SIZE(HDRP(PREV_BLKP(bp)));
         cur_size += prev_size;
         PUT(FTRP(bp), PACK(cur_size, 0));
@@ -93,6 +145,8 @@ static void *coalesce(char *bp)
     }
     else
     {
+        remove_from_flist(PREV_BLKP(bp));
+        remove_from_flist(NEXT_BLKP(bp));
         size_t prev_size = GET_SIZE(HDRP(PREV_BLKP(bp)));
         size_t next_size = GET_SIZE(HDRP(NEXT_BLKP(bp)));
         cur_size += (prev_size + next_size);
@@ -100,6 +154,7 @@ static void *coalesce(char *bp)
         PUT(FTRP(NEXT_BLKP(bp)), PACK(cur_size, 0));
         bp = PREV_BLKP(bp);
     }
+    insert_to_flist(bp);
     return bp;
 }
 
@@ -111,9 +166,14 @@ static void *extend_heap(size_t words)
         return NULL;                       // bp also points to the new block's payload
     // 原来的结尾块变成了新的空闲块的头部,新的空闲块的最后一个字变成了新的结尾快
     PUT(HDRP(bp), PACK(size, 0));         // set new free block header
-    PUT(FTRP(bp), PACK(size, 0));         // set new free block footer
+    PUT(FTRP(bp), PACK(size, 0));             // set new free block footer
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); // set new epilogue block
-    return coalesce(bp);
+    SET_PREV_FRBLK(bp, 0);
+    SET_NEXT_FRBLK(bp, 0);
+
+    insert_to_flist(bp);
+
+    return bp;
 }
 
 /*
@@ -128,6 +188,7 @@ int mm_init(void)
     PUT(heap_listp + 2 * WSIZE, PACK(DSIZE, 1));
     PUT(heap_listp + 3 * WSIZE, PACK(0, 1));
     heap_listp += 2 * WSIZE;
+    free_listp = NULL;
     if (extend_heap(CHUNK_SIZE / WSIZE) == NULL)
         return -1;
     return 0;
@@ -136,33 +197,38 @@ int mm_init(void)
 static void place(void *bp, size_t asize)
 {
     size_t cur_size = GET_SIZE(HDRP(bp));
-    if (cur_size - asize >= (2 * DSIZE))
+    remove_from_flist(bp);
+    if (cur_size - asize >= (2 * DSIZE)) // need to Split
     {
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
+
         size_t remain = cur_size - asize;
+
         void *next_blkp = NEXT_BLKP(bp);
         PUT(HDRP(next_blkp), PACK(remain, 0));
         PUT(FTRP(next_blkp), PACK(remain, 0));
+        coalesce(next_blkp);
     }
-    else
+    else // not need to split
     {
         PUT(HDRP(bp), PACK(cur_size, 1));
         PUT(FTRP(bp), PACK(cur_size, 1));
     }
 }
 
-static void *find_first_fit(size_t size)
+static void *first_fit(size_t size)
 {
-    char *bp = NEXT_BLKP(heap_listp);
-    size_t cur_size = GET_SIZE(HDRP(bp));
-    while (cur_size > 0 && (GET_ALLOC(HDRP(bp)) || cur_size < size))
+    void *bp = free_listp;
+    while (bp != NULL)
     {
-        bp = NEXT_BLKP(bp);
-        cur_size = GET_SIZE(HDRP(bp));
+        size_t cur_size = GET_SIZE(HDRP(bp));
+        if (cur_size >= size)
+        {
+            break;
+        }
+        bp = NEXT_FBLKP(bp);
     }
-    if (!cur_size)
-        return NULL;
     return bp;
 }
 /*
@@ -179,7 +245,7 @@ void *mm_malloc(size_t size)
     {
         size = ALIGN((size + DSIZE));
     }
-    char *bp = find_first_fit(size);
+    char *bp = first_fit(size);
     if (bp != NULL)
     {
         place(bp, size);
