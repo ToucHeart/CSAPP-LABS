@@ -48,12 +48,16 @@ typedef struct {
      * TODO: You will need to add more fields to this structure
      *       to efficiently implement q_size and q_insert_tail
      */
+    list_ele_t *tail;
+    size_t size;
 } queue_t;
 
 /************** Operations on queue ************************/
 
 /* Create empty queue. */
 queue_t *queue_new(void);
+
+list_ele_t *new_ele(char *val);
 
 /* Free ALL storage used by queue. */
 void queue_free(queue_t *q);
@@ -72,3 +76,8 @@ size_t queue_size(queue_t *q);
 
 /* Reverse elements in queue */
 void queue_reverse(queue_t *q);
+
+char *strdup(const char *str);
+
+size_t mymin(size_t a, size_t b);
+
