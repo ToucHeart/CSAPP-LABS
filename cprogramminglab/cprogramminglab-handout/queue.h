@@ -79,5 +79,5 @@ void queue_reverse(queue_t *q);
 
 char *strdup(const char *str);
 
-size_t mymin(size_t a, size_t b);
+
 

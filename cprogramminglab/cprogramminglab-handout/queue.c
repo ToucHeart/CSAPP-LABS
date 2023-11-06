@@ -127,9 +127,6 @@ bool queue_insert_tail(queue_t *q, const char *s) {
     return true;
 }
 
-size_t mymin(size_t a, size_t b) {
-    return a < b ? a : b;
-}
 /**
  * @brief Attempts to remove an element from head of a queue
  *
@@ -154,9 +151,8 @@ bool queue_remove_head(queue_t *q, char *buf, size_t bufsize) {
     list_ele_t *h = q->head;
     q->head = q->head->next;
     if (buf != NULL) {
-        size_t minsize = mymin(bufsize - 1, strlen(h->value));
-        strncpy(buf, h->value, minsize);
-        buf[minsize] = '\0';
+        strncpy(buf, h->value, bufsize - 1);
+        buf[bufsize - 1] = '\0';
     }
     free(h->value);
     free(h);
