@@ -150,6 +150,9 @@ bool queue_remove_head(queue_t *q, char *buf, size_t bufsize) {
         return false;
     list_ele_t *h = q->head;
     q->head = q->head->next;
+    if (q->head == NULL) {
+        q->tail = NULL;
+    }
     if (buf != NULL) {
         strncpy(buf, h->value, bufsize - 1);
         buf[bufsize - 1] = '\0';
