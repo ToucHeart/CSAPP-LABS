@@ -16,6 +16,7 @@ static unsigned long long visitAddr;             // visit address in each line
 static int visitSize;                            // be ignored
 static cacheLine **cachelines;                   // simulate cache lines
 static int hit, miss, eviction;                  // each case count
+static char type;
 
 #define DEBUG_PRINT(valid, msg, ...) \
     if (valid)                       \
@@ -185,24 +186,6 @@ void visitCache()
     VERBOSE_PRINT("eviction ")
 }
 
-void getSize(char *line)
-{
-    sscanf(line, "%d", &visitSize);
-    DEBUG_PRINT("size is %d\n", visitSize);
-}
-
-void removeLinefeed(char *line)
-{
-    for (; *line != '\0'; ++line)
-    {
-        if (*line == '\n')
-        {
-            *line = '\0';
-            return;
-        }
-    }
-}
-
 void parseFile()
 {
     FILE *file = fopen(traceName, "r");
@@ -211,19 +194,10 @@ void parseFile()
         perror(traceName);
         exit(EXIT_FAILURE);
     }
-    char line[1024] = {0};
 
-    while (fgets(line, sizeof(line), file))
+    while (fscanf(file, " %c %llx,%d", &type, &visitAddr, &visitSize) > 0)
     {
-        if (line[0] != ' ')
-            continue;
-        if (verbose)
-        {
-            removeLinefeed(line);
-            printf("%s ", line + 1);
-        }
-        char type = line[1];
-        getSize(getAddress(line + 3));
+        VERBOSE_PRINT("%c %llx,%d ", type, visitAddr, visitSize);
         switch (type)
         {
         case 'L':
@@ -235,6 +209,8 @@ void parseFile()
             break;
         case 'S':
             visitCache();
+            break;
+        case 'I':;
             break;
         default:
             printf("Unknown type: %c\n", type);
