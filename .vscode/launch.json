@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C++ Launch (GDB)",
+            "type": "cppdbg",
+            "request": "launch",
+            "targetArchitecture": "x86",
+            "program": "/home/mxj/cmu-lab/cache/cachelab-handout/csim",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "args": [
+                "-z"
+            ],
+            "stopAtEntry": true,
+            "cwd": "/home/mxj/cmu-lab/cache/cachelab-handout",
+            "externalConsole": false,
+            "preLaunchTask": "build",
+        }
+    ]
+}
